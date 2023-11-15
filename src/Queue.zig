@@ -142,12 +142,12 @@ pub fn getNext(self: *Self, prev: *Node) ?*Node {
     return next_opt;
 }
 
-const Element = struct {
-    node: Node,
-    id: usize,
-};
-
 test "push and pop" {
+    const Element = struct {
+        node: Node,
+        id: usize,
+    };
+
     var elements: [10]Element = undefined;
     var queue: Self = undefined;
     init(&queue);
