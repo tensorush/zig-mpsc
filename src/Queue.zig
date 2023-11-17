@@ -23,7 +23,7 @@ pub fn init(self: *Self) void {
 }
 
 pub fn push(self: *Self, node: *Node) void {
-    pushOrdered(self, node, node);
+    self.pushOrdered(node, node);
 }
 
 pub fn pushOrdered(self: *Self, first: *Node, last: *Node) void {
@@ -45,7 +45,7 @@ pub fn pushUnordered(self: *Self, nodes: []*Node) void {
         @atomicStore(?*Node, &nodes[i].next_opt, nodes[i + 1], .Monotonic);
     }
 
-    pushOrdered(self, first, last);
+    self.pushOrdered(first, last);
 }
 
 pub fn isEmpty(self: *Self) bool {
@@ -82,7 +82,7 @@ pub fn poll(self: *Self, node: **Node) PollResult {
         return .Retry;
     }
 
-    push(self, &self.stub);
+    self.push(&self.stub);
 
     next_opt = @atomicLoad(?*Node, &tail.next_opt, .Acquire);
     if (next_opt) |next| {
@@ -99,7 +99,7 @@ pub fn pop(self: *Self) ?*Node {
     var node: *Node = undefined;
 
     while (result == .Retry) {
-        result = poll(self, &node);
+        result = self.poll(&node);
         if (result == .Empty) {
             return null;
         }
@@ -142,28 +142,313 @@ pub fn getNext(self: *Self, prev: *Node) ?*Node {
     return next_opt;
 }
 
-test "push and pop" {
-    const Element = struct {
-        node: Node,
-        id: usize,
-    };
+const Element = struct {
+    node: Node,
+    id: usize,
+};
 
+test "ordered push, get, and pop" {
     var elements: [10]Element = undefined;
     var queue: Self = undefined;
     init(&queue);
 
+    // Push
     for (elements[0..], 0..) |*element, i| {
         element.id = i;
         queue.push(&element.node);
     }
 
-    try std.testing.expectEqual(false, queue.isEmpty());
+    try std.testing.expect(!queue.isEmpty());
 
-    var node_opt = queue.pop();
+    // Get
+    var node_opt = queue.getTail();
+    while (node_opt) |node| : (node_opt = queue.getNext(node)) {
+        const element = @fieldParentPtr(Element, "node", node);
+        try std.testing.expectEqual(&elements[element.id], element);
+    }
+
+    try std.testing.expect(!queue.isEmpty());
+
+    // Pop
+    node_opt = queue.pop();
     while (node_opt) |node| : (node_opt = queue.pop()) {
         const element = @fieldParentPtr(Element, "node", node);
         try std.testing.expectEqual(&elements[element.id], element);
     }
 
-    try std.testing.expectEqual(true, queue.isEmpty());
+    try std.testing.expect(queue.isEmpty());
+}
+
+test "partial ordered push, get, and pop" {
+    var elements: [10]Element = undefined;
+    var prevs: [elements.len]*Node = undefined;
+    var queue: Self = undefined;
+    init(&queue);
+
+    // Partial push start
+    for (elements[0..], 0..) |*element, i| {
+        element.id = i;
+        if (i > elements.len / 2) {
+            @atomicStore(?*Node, &element.node.next_opt, null, .Monotonic);
+            prevs[i] = @atomicRmw(*Node, &queue.head, .Xchg, &element.node, .AcqRel);
+        } else {
+            queue.push(&element.node);
+        }
+    }
+
+    // Get
+    var node_opt = queue.getTail();
+    while (node_opt) |node| : (node_opt = queue.getNext(node)) {
+        const element = @fieldParentPtr(Element, "node", node);
+        try std.testing.expectEqual(&elements[element.id], element);
+    }
+
+    try std.testing.expect(!queue.isEmpty());
+
+    // Partial push end
+    for (elements[(elements.len / 2) + 1 ..], (elements.len / 2) + 1..) |*element, i| {
+        @atomicStore(?*Node, &prevs[i].next_opt, &element.node, .Release);
+    }
+
+    try std.testing.expect(!queue.isEmpty());
+
+    // Get
+    node_opt = queue.getTail();
+    while (node_opt) |node| : (node_opt = queue.getNext(node)) {
+        const element = @fieldParentPtr(Element, "node", node);
+        try std.testing.expectEqual(&elements[element.id], element);
+    }
+
+    try std.testing.expect(!queue.isEmpty());
+
+    // Pop
+    node_opt = queue.pop();
+    while (node_opt) |node| : (node_opt = queue.pop()) {
+        const element = @fieldParentPtr(Element, "node", node);
+        try std.testing.expectEqual(&elements[element.id], element);
+    }
+
+    try std.testing.expect(queue.isEmpty());
+}
+
+test "unordered push, get, and pop" {
+    var elements: [1000]Element = undefined;
+    var nodes: [64]*Node = undefined;
+    var queue: Self = undefined;
+    init(&queue);
+
+    var prng = std.rand.DefaultPrng.init(blk: {
+        var seed: u64 = undefined;
+        try std.os.getrandom(std.mem.asBytes(&seed));
+        break :blk seed;
+    });
+    const rng = prng.random();
+
+    var batch_size: usize = undefined;
+    var i: usize = 0;
+    while (i < elements.len) : (i += batch_size) {
+        batch_size = @max(1, rng.uintLessThan(usize, @min(nodes.len, elements.len - i)));
+
+        var j: usize = 0;
+        while (j < batch_size) : (j += 1) {
+            elements[i + j].id = i + j;
+            nodes[j] = &elements[i + j].node;
+        }
+        queue.pushUnordered(nodes[0..batch_size]);
+        try std.testing.expect(!queue.isEmpty());
+    }
+
+    try std.testing.expect(!queue.isEmpty());
+
+    // Get
+    var node_opt = queue.getTail();
+    while (node_opt) |node| : (node_opt = queue.getNext(node)) {
+        const element = @fieldParentPtr(Element, "node", node);
+        try std.testing.expectEqual(&elements[element.id], element);
+    }
+
+    try std.testing.expect(!queue.isEmpty());
+
+    // Pop
+    node_opt = queue.pop();
+    while (node_opt) |node| : (node_opt = queue.pop()) {
+        const element = @fieldParentPtr(Element, "node", node);
+        try std.testing.expectEqual(&elements[element.id], element);
+    }
+
+    try std.testing.expect(queue.isEmpty());
+}
+
+test "partial push and poll" {
+    var elements: [3]Element = undefined;
+    var prevs: [elements.len]*Node = undefined;
+    var queue: Self = undefined;
+    var node: *Node = undefined;
+    init(&queue);
+
+    for (elements[0..], 0..) |*element, i| {
+        element.id = i;
+    }
+
+    try std.testing.expectEqual(queue.poll(&node), .Empty);
+    try std.testing.expect(queue.isEmpty());
+
+    queue.push(&elements[0].node);
+    try std.testing.expect(!queue.isEmpty());
+    try std.testing.expectEqual(queue.poll(&node), .Item);
+    try std.testing.expectEqual(queue.poll(&node), .Empty);
+
+    queue.push(&elements[0].node);
+    queue.push(&elements[1].node);
+    try std.testing.expect(!queue.isEmpty());
+    try std.testing.expectEqual(queue.poll(&node), .Item);
+    try std.testing.expect(!queue.isEmpty());
+    try std.testing.expectEqual(queue.poll(&node), .Item);
+    try std.testing.expectEqual(queue.poll(&node), .Empty);
+
+    // Partial push
+    @atomicStore(?*Node, &elements[0].node.next_opt, null, .Monotonic);
+    prevs[0] = @atomicRmw(*Node, &queue.head, .Xchg, &elements[0].node, .AcqRel);
+    try std.testing.expectEqual(queue.poll(&node), .Retry);
+    try std.testing.expectEqual(queue.poll(&node), .Retry);
+
+    @atomicStore(?*Node, &prevs[0].next_opt, &elements[0].node, .Release);
+    try std.testing.expectEqual(queue.poll(&node), .Item);
+    try std.testing.expectEqual(queue.poll(&node), .Empty);
+
+    // Full and partial push
+    queue.push(&elements[0].node);
+    queue.push(&elements[1].node);
+    @atomicStore(?*Node, &elements[2].node.next_opt, null, .Monotonic);
+    prevs[2] = @atomicRmw(*Node, &queue.head, .Xchg, &elements[2].node, .AcqRel);
+    try std.testing.expectEqual(queue.poll(&node), .Item);
+    try std.testing.expectEqual(queue.poll(&node), .Retry);
+    try std.testing.expectEqual(queue.poll(&node), .Retry);
+
+    @atomicStore(?*Node, &prevs[2].next_opt, &elements[2].node, .Release);
+    try std.testing.expectEqual(queue.poll(&node), .Item);
+    try std.testing.expectEqual(queue.poll(&node), .Item);
+    try std.testing.expectEqual(queue.poll(&node), .Empty);
+
+    // Partial push and poll start
+    queue.push(&elements[0].node);
+
+    var tail = @atomicLoad(*Node, &queue.tail, .Monotonic);
+    var next_opt = @atomicLoad(?*Node, &tail.next_opt, .Acquire);
+    var head: *Node = undefined;
+    var is_done = false;
+
+    if (tail == &queue.stub) {
+        if (next_opt) |next| {
+            @atomicStore(*Node, &queue.tail, next, .Monotonic);
+            tail = next;
+            next_opt = @atomicLoad(?*Node, &tail.next_opt, .Acquire);
+        } else {
+            head = @atomicLoad(*Node, &queue.head, .Acquire);
+            if (tail != head) {
+                is_done = true; // .Retry
+            } else {
+                is_done = true; // .Empty
+            }
+        }
+    }
+
+    if (next_opt) |next| {
+        @atomicStore(*Node, &queue.tail, next, .Monotonic);
+        is_done = true; // .Item
+        node = tail;
+    }
+
+    head = @atomicLoad(*Node, &queue.head, .Acquire);
+    if (tail != head) {
+        is_done = true; // .Retry
+    }
+
+    try std.testing.expect(!is_done);
+
+    @atomicStore(?*Node, &elements[1].node.next_opt, null, .Monotonic);
+    prevs[1] = @atomicRmw(*Node, &queue.head, .Xchg, &elements[1].node, .AcqRel);
+
+    // Partial push and poll end
+    queue.push(&queue.stub);
+
+    var poll_result = PollResult.Retry;
+
+    next_opt = @atomicLoad(?*Node, &tail.next_opt, .Acquire);
+    if (next_opt) |next| {
+        @atomicStore(*Node, &queue.tail, next, .Monotonic);
+        poll_result = .Item;
+        node = tail;
+    }
+
+    try std.testing.expectEqual(poll_result, .Retry);
+
+    @atomicStore(?*Node, &prevs[1].next_opt, &elements[1].node, .Release);
+    try std.testing.expectEqual(queue.poll(&node), .Item);
+    try std.testing.expectEqual(&elements[0].node, node);
+    try std.testing.expectEqual(queue.poll(&node), .Item);
+    try std.testing.expectEqual(&elements[1].node, node);
+    try std.testing.expectEqual(queue.poll(&node), .Empty);
+}
+
+test "pushFrontByConsumer, get, and pop" {
+    var elements: [10]Element = undefined;
+    var queue: Self = undefined;
+    init(&queue);
+
+    // Push front by consumer
+    try std.testing.expectEqual(queue.pop(), null);
+    queue.pushFrontByConsumer(&elements[0].node);
+    try std.testing.expect(!queue.isEmpty());
+    var node_opt = queue.pop();
+    try std.testing.expectEqual(node_opt, &elements[0].node);
+    try std.testing.expectEqual(queue.pop(), null);
+    try std.testing.expect(queue.isEmpty());
+
+    queue.pushFrontByConsumer(&elements[0].node);
+    queue.pushFrontByConsumer(&elements[1].node);
+    try std.testing.expect(!queue.isEmpty());
+    try std.testing.expectEqual(queue.pop(), &elements[1].node);
+    try std.testing.expectEqual(queue.pop(), &elements[0].node);
+    try std.testing.expectEqual(queue.pop(), null);
+
+    queue.pushFrontByConsumer(&elements[1].node);
+    queue.pushFrontByConsumer(&elements[0].node);
+    queue.push(&elements[2].node);
+    try std.testing.expectEqual(queue.pop(), &elements[0].node);
+    try std.testing.expectEqual(queue.pop(), &elements[1].node);
+    try std.testing.expectEqual(queue.pop(), &elements[2].node);
+    try std.testing.expectEqual(queue.pop(), null);
+
+    // Push
+    for (elements[0..], 0..) |*element, i| {
+        element.id = i;
+        queue.push(&element.node);
+    }
+
+    // Pop and push front by consumer
+    node_opt = queue.pop();
+    queue.pushFrontByConsumer(node_opt.?);
+    try std.testing.expectEqual(node_opt, queue.pop());
+    queue.pushFrontByConsumer(node_opt.?);
+
+    try std.testing.expect(!queue.isEmpty());
+
+    // Get
+    node_opt = queue.getTail();
+    while (node_opt) |node| : (node_opt = queue.getNext(node)) {
+        const element = @fieldParentPtr(Element, "node", node);
+        try std.testing.expectEqual(&elements[element.id], element);
+    }
+
+    try std.testing.expect(!queue.isEmpty());
+
+    // Pop
+    node_opt = queue.pop();
+    while (node_opt) |node| : (node_opt = queue.pop()) {
+        const element = @fieldParentPtr(Element, "node", node);
+        try std.testing.expectEqual(&elements[element.id], element);
+    }
+
+    try std.testing.expect(queue.isEmpty());
 }
