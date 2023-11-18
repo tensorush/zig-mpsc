@@ -3,7 +3,7 @@
 [![CI][ci-shield]][ci-url]
 [![LC][lc-shield]][lc-url]
 
-### Zig port of the [atomic MPSC queue](https://www.1024cores.net/home/lock-free-algorithms/queues/intrusive-mpsc-node-based-queue) created by [Dmitry Vyukov](https://github.com/dvyukov).
+### Zig port of the [intrusive wait-free MPSC queue](https://www.1024cores.net/home/lock-free-algorithms/queues/intrusive-mpsc-node-based-queue) created by [Dmitry Vyukov](https://github.com/dvyukov).
 
 ### :rocket: Usage
 
