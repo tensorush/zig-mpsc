@@ -19,7 +19,7 @@
         .version = "<version_of_your_package>",
         .dependencies = .{
             .mpsc = .{
-                .url = "https://github.com/tensorush/mpsc/archive/<git_tag_or_commit_hash>.tar.gz",
+                .url = "https://github.com/tensorush/zig-mpsc/archive/<git_tag_or_commit_hash>.tar.gz",
                 .hash = "<package_hash>",
             },
         },
