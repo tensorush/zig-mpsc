@@ -37,8 +37,8 @@ pub fn pushUnordered(self: *Self, nodes: []*Node) void {
         return {};
     }
 
-    var first = nodes[0];
-    var last = nodes[nodes.len - 1];
+    const first = nodes[0];
+    const last = nodes[nodes.len - 1];
 
     var i: usize = 0;
     while (i < nodes.len - 1) : (i += 1) {
@@ -109,7 +109,7 @@ pub fn pop(self: *Self) ?*Node {
 }
 
 pub fn pushFrontByConsumer(self: *Self, node: *Node) void {
-    var tail = @atomicLoad(*Node, &self.tail, .Monotonic);
+    const tail = @atomicLoad(*Node, &self.tail, .Monotonic);
     @atomicStore(?*Node, &node.next_opt, tail, .Monotonic);
     @atomicStore(*Node, &self.tail, node, .Monotonic);
 }
