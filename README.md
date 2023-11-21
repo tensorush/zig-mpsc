@@ -1,7 +1,6 @@
 ## :lizard: :control_knobs: **zig mpsc**
 
 [![CI][ci-shield]][ci-url]
-[![CD][cd-shield]][cd-url]
 [![CC][cc-shield]][cc-url]
 [![LC][lc-shield]][lc-url]
 
@@ -49,8 +48,6 @@
 
 [ci-shield]: https://img.shields.io/github/actions/workflow/status/tensorush/zig-mpsc/ci.yaml?branch=main&style=for-the-badge&logo=github&label=CI&labelColor=black
 [ci-url]: https://github.com/tensorush/zig-mpsc/blob/main/.github/workflows/ci.yaml
-[cd-shield]: https://img.shields.io/github/actions/workflow/status/tensorush/zig-mpsc/cd.yaml?branch=main&style=for-the-badge&logo=github&label=CD&labelColor=black
-[cd-url]: https://github.com/tensorush/zig-mpsc/blob/main/.github/workflows/cd.yaml
 [cc-shield]: https://img.shields.io/codecov/c/github/tensorush/zig-mpsc?style=for-the-badge&labelColor=black
 [cc-url]: https://app.codecov.io/gh/tensorush/zig-mpsc
 [lc-shield]: https://img.shields.io/github/license/tensorush/zig-mpsc.svg?style=for-the-badge&labelColor=black
