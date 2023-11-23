@@ -1,8 +1,10 @@
 ## :lizard: :control_knobs: **zig mpsc**
 
-[![CI][ci-shield]][ci-url]
-[![CC][cc-shield]][cc-url]
-[![LC][lc-shield]][lc-url]
+[![CI][ci-shd]][ci-url]
+[![CD][cd-shd]][cd-url]
+[![DC][dc-shd]][dc-url]
+[![CC][cc-shd]][cc-url]
+[![LC][lc-shd]][lc-url]
 
 ### Zig port of the [intrusive wait-free MPSC queue](https://www.1024cores.net/home/lock-free-algorithms/queues/intrusive-mpsc-node-based-queue) created by [Dmitry Vyukov](https://github.com/dvyukov).
 
@@ -46,9 +48,13 @@
 
 <!-- MARKDOWN LINKS -->
 
-[ci-shield]: https://img.shields.io/github/actions/workflow/status/tensorush/zig-mpsc/ci.yaml?branch=main&style=for-the-badge&logo=github&label=CI&labelColor=black
+[ci-shd]: https://img.shields.io/github/actions/workflow/status/tensorush/zig-mpsc/ci.yaml?branch=main&style=for-the-badge&logo=github&label=CI&labelColor=black
 [ci-url]: https://github.com/tensorush/zig-mpsc/blob/main/.github/workflows/ci.yaml
-[cc-shield]: https://img.shields.io/codecov/c/github/tensorush/zig-mpsc?style=for-the-badge&labelColor=black
+[cd-shd]: https://img.shields.io/github/actions/workflow/status/tensorush/zig-mpsc/cd.yaml?branch=main&style=for-the-badge&logo=github&label=CD&labelColor=black
+[cd-url]: https://github.com/tensorush/zig-mpsc/blob/main/.github/workflows/cd.yaml
+[dc-shd]: https://img.shields.io/badge/click-F6A516?style=for-the-badge&logo=zig&logoColor=F6A516&label=docs&labelColor=black
+[dc-url]: https://tensorush.github.io/zig-mpsc
+[cc-shd]: https://img.shields.io/codecov/c/github/tensorush/zig-mpsc?style=for-the-badge&labelColor=black
 [cc-url]: https://app.codecov.io/gh/tensorush/zig-mpsc
-[lc-shield]: https://img.shields.io/github/license/tensorush/zig-mpsc.svg?style=for-the-badge&labelColor=black
+[lc-shd]: https://img.shields.io/github/license/tensorush/zig-mpsc.svg?style=for-the-badge&labelColor=black
 [lc-url]: https://github.com/tensorush/zig-mpsc/blob/main/LICENSE.md
