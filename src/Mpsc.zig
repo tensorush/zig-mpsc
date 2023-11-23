@@ -1,37 +1,51 @@
+//! Intrusive wait-free MPSC queue implementation.
+
 const std = @import("std");
 
 const Self = @This();
 
-const PollResult = enum {
+/// Result status of queue polling.
+pub const PollResult = enum {
     Empty,
     Retry,
     Item,
 };
 
-const Node = struct {
-    next_opt: ?*Node = null,
+/// Intrusive queue node.
+pub const Node = struct {
+    next_opt: ?*Node,
 };
 
+/// Pointer to the start of the queue.
 head: *Node,
+/// Pointer to the end of the queue.
 tail: *Node,
+/// Stub node for null pointers.
 stub: Node,
 
+/// Initializes the MPSC queue.
 pub fn init(self: *Self) void {
     @atomicStore(*Node, &self.head, &self.stub, .Monotonic);
     @atomicStore(*Node, &self.tail, &self.stub, .Monotonic);
     @atomicStore(?*Node, &self.stub.next_opt, null, .Monotonic);
 }
 
+/// Push a single node.
 pub fn push(self: *Self, node: *Node) void {
     self.pushOrdered(node, node);
 }
 
+/// Push an ordered list of nodes in a single operation.
+/// The nodes must all be appropriately linked from first to last.
 pub fn pushOrdered(self: *Self, first: *Node, last: *Node) void {
     @atomicStore(?*Node, &last.next_opt, null, .Monotonic);
     const prev = @atomicRmw(*Node, &self.head, .Xchg, last, .AcqRel);
     @atomicStore(?*Node, &prev.next_opt, first, .Release);
 }
 
+/// Push a number of nodes at once.
+/// The nodes will be appropriately linked together
+/// before being inserted into the queue.
 pub fn pushUnordered(self: *Self, nodes: []*Node) void {
     if (nodes.len == 0) {
         return {};
@@ -48,6 +62,7 @@ pub fn pushUnordered(self: *Self, nodes: []*Node) void {
     self.pushOrdered(first, last);
 }
 
+/// Checks if the queue is empty.
 pub fn isEmpty(self: *Self) bool {
     var tail = @atomicLoad(*Node, &self.tail, .Monotonic);
     const next_opt = @atomicLoad(?*Node, &tail.next_opt, .Acquire);
@@ -55,6 +70,7 @@ pub fn isEmpty(self: *Self) bool {
     return tail == &self.stub and next_opt == null and tail == head;
 }
 
+/// Polls the queue for consuming the front node from the queue.
 pub fn poll(self: *Self, node: **Node) PollResult {
     var head: *Node = undefined;
     var tail = @atomicLoad(*Node, &self.tail, .Monotonic);
@@ -94,6 +110,7 @@ pub fn poll(self: *Self, node: **Node) PollResult {
     return .Retry;
 }
 
+/// Pops the front node from the queue.
 pub fn pop(self: *Self) ?*Node {
     var result = PollResult.Retry;
     var node: *Node = undefined;
@@ -108,12 +125,15 @@ pub fn pop(self: *Self) ?*Node {
     return node;
 }
 
+/// Push at the front of the queue.
+/// Only the consumer is allowed to do that.
 pub fn pushFrontByConsumer(self: *Self, node: *Node) void {
     const tail = @atomicLoad(*Node, &self.tail, .Monotonic);
     @atomicStore(?*Node, &node.next_opt, tail, .Monotonic);
     @atomicStore(*Node, &self.tail, node, .Monotonic);
 }
 
+/// Returns the last node of the queue.
 pub fn getTail(self: *Self) ?*Node {
     var tail = @atomicLoad(*Node, &self.tail, .Monotonic);
     const next_opt = @atomicLoad(?*Node, &tail.next_opt, .Acquire);
@@ -130,6 +150,7 @@ pub fn getTail(self: *Self) ?*Node {
     return tail;
 }
 
+/// Returns the next node.
 pub fn getNext(self: *Self, prev: *Node) ?*Node {
     var next_opt = @atomicLoad(?*Node, &prev.next_opt, .Acquire);
 

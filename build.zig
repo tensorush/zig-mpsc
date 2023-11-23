@@ -1,10 +1,37 @@
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
-    const root_source_file = std.Build.FileSource.relative("src/Queue.zig");
+    const root_source_file = std.Build.FileSource.relative("src/Mpsc.zig");
 
     // Module
     _ = b.addModule("mpsc", .{ .source_file = root_source_file });
+
+    // Library
+    const lib_step = b.step("lib", "Install library");
+
+    const lib = b.addStaticLibrary(.{
+        .name = "mpsc",
+        .root_source_file = root_source_file,
+        .target = b.standardTargetOptions(.{}),
+        .optimize = b.standardOptimizeOption(.{}),
+        .version = .{ .major = 0, .minor = 2, .patch = 0 },
+    });
+
+    const lib_install = b.addInstallArtifact(lib, .{});
+    lib_step.dependOn(&lib_install.step);
+    b.default_step.dependOn(lib_step);
+
+    // Docs
+    const docs_step = b.step("docs", "Emit docs");
+
+    const docs_install = b.addInstallDirectory(.{
+        .source_dir = lib.getEmittedDocs(),
+        .install_dir = .prefix,
+        .install_subdir = "docs",
+    });
+
+    docs_step.dependOn(&docs_install.step);
+    b.default_step.dependOn(docs_step);
 
     // Tests
     const tests_step = b.step("test", "Run tests");
