@@ -1,10 +1,10 @@
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
-    const root_source_file = std.Build.FileSource.relative("src/Mpsc.zig");
+    const root_source_file = std.Build.LazyPath.relative("src/Mpsc.zig");
 
     // Module
-    _ = b.addModule("mpsc", .{ .source_file = root_source_file });
+    _ = b.addModule("mpsc", .{ .root_source_file = root_source_file });
 
     // Library
     const lib_step = b.step("lib", "Install library");
@@ -14,7 +14,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = root_source_file,
         .target = b.standardTargetOptions(.{}),
         .optimize = b.standardOptimizeOption(.{}),
-        .version = .{ .major = 0, .minor = 2, .patch = 0 },
+        .version = .{ .major = 0, .minor = 2, .patch = 1 },
     });
 
     const lib_install = b.addInstallArtifact(lib, .{});
