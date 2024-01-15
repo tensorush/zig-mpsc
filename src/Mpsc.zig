@@ -2,7 +2,7 @@
 
 const std = @import("std");
 
-const Self = @This();
+const Mpsc = @This();
 
 /// Result status of queue polling.
 pub const PollResult = enum {
@@ -20,24 +20,24 @@ pub const Node = struct {
 head: *Node,
 /// Pointer to the end of the queue.
 tail: *Node,
-/// Stub node for null pointers.
+/// Stub node.
 stub: Node,
 
 /// Initializes the MPSC queue.
-pub fn init(self: *Self) void {
+pub fn init(self: *Mpsc) void {
     @atomicStore(*Node, &self.head, &self.stub, .Monotonic);
     @atomicStore(*Node, &self.tail, &self.stub, .Monotonic);
     @atomicStore(?*Node, &self.stub.next_opt, null, .Monotonic);
 }
 
 /// Push a single node.
-pub fn push(self: *Self, node: *Node) void {
+pub fn push(self: *Mpsc, node: *Node) void {
     self.pushOrdered(node, node);
 }
 
 /// Push an ordered list of nodes in a single operation.
 /// The nodes must all be appropriately linked from first to last.
-pub fn pushOrdered(self: *Self, first: *Node, last: *Node) void {
+pub fn pushOrdered(self: *Mpsc, first: *Node, last: *Node) void {
     @atomicStore(?*Node, &last.next_opt, null, .Monotonic);
     const prev = @atomicRmw(*Node, &self.head, .Xchg, last, .AcqRel);
     @atomicStore(?*Node, &prev.next_opt, first, .Release);
@@ -46,7 +46,7 @@ pub fn pushOrdered(self: *Self, first: *Node, last: *Node) void {
 /// Push a number of nodes at once.
 /// The nodes will be appropriately linked together
 /// before being inserted into the queue.
-pub fn pushUnordered(self: *Self, nodes: []*Node) void {
+pub fn pushUnordered(self: *Mpsc, nodes: []*Node) void {
     if (nodes.len == 0) {
         return {};
     }
@@ -63,7 +63,7 @@ pub fn pushUnordered(self: *Self, nodes: []*Node) void {
 }
 
 /// Checks if the queue is empty.
-pub fn isEmpty(self: *Self) bool {
+pub fn isEmpty(self: *Mpsc) bool {
     var tail = @atomicLoad(*Node, &self.tail, .Monotonic);
     const next_opt = @atomicLoad(?*Node, &tail.next_opt, .Acquire);
     const head = @atomicLoad(*Node, &self.head, .Acquire);
@@ -71,7 +71,7 @@ pub fn isEmpty(self: *Self) bool {
 }
 
 /// Polls the queue for consuming the front node from the queue.
-pub fn poll(self: *Self, node: **Node) PollResult {
+pub fn poll(self: *Mpsc, node: **Node) PollResult {
     var head: *Node = undefined;
     var tail = @atomicLoad(*Node, &self.tail, .Monotonic);
     var next_opt = @atomicLoad(?*Node, &tail.next_opt, .Acquire);
@@ -111,7 +111,7 @@ pub fn poll(self: *Self, node: **Node) PollResult {
 }
 
 /// Pops the front node from the queue.
-pub fn pop(self: *Self) ?*Node {
+pub fn pop(self: *Mpsc) ?*Node {
     var result = PollResult.Retry;
     var node: *Node = undefined;
 
@@ -127,14 +127,14 @@ pub fn pop(self: *Self) ?*Node {
 
 /// Push at the front of the queue.
 /// Only the consumer is allowed to do that.
-pub fn pushFrontByConsumer(self: *Self, node: *Node) void {
+pub fn pushFrontByConsumer(self: *Mpsc, node: *Node) void {
     const tail = @atomicLoad(*Node, &self.tail, .Monotonic);
     @atomicStore(?*Node, &node.next_opt, tail, .Monotonic);
     @atomicStore(*Node, &self.tail, node, .Monotonic);
 }
 
 /// Returns the last node of the queue.
-pub fn getTail(self: *Self) ?*Node {
+pub fn getTail(self: *Mpsc) ?*Node {
     var tail = @atomicLoad(*Node, &self.tail, .Monotonic);
     const next_opt = @atomicLoad(?*Node, &tail.next_opt, .Acquire);
 
@@ -151,7 +151,7 @@ pub fn getTail(self: *Self) ?*Node {
 }
 
 /// Returns the next node.
-pub fn getNext(self: *Self, prev: *Node) ?*Node {
+pub fn getNext(self: *Mpsc, prev: *Node) ?*Node {
     var next_opt = @atomicLoad(?*Node, &prev.next_opt, .Acquire);
 
     if (next_opt) |next| {
@@ -170,8 +170,8 @@ const Element = struct {
 
 test "ordered push, get, and pop" {
     var elements: [10]Element = undefined;
-    var queue: Self = undefined;
-    init(&queue);
+    var queue: Mpsc = undefined;
+    queue.init();
 
     // Push
     for (elements[0..], 0..) |*element, i| {
@@ -203,8 +203,8 @@ test "ordered push, get, and pop" {
 test "partial ordered push, get, and pop" {
     var elements: [10]Element = undefined;
     var prevs: [elements.len]*Node = undefined;
-    var queue: Self = undefined;
-    init(&queue);
+    var queue: Mpsc = undefined;
+    queue.init();
 
     // Partial push start
     for (elements[0..], 0..) |*element, i| {
@@ -255,8 +255,8 @@ test "partial ordered push, get, and pop" {
 test "unordered push, get, and pop" {
     var elements: [1000]Element = undefined;
     var nodes: [64]*Node = undefined;
-    var queue: Self = undefined;
-    init(&queue);
+    var queue: Mpsc = undefined;
+    queue.init();
 
     var prng = std.rand.DefaultPrng.init(blk: {
         var seed: u64 = undefined;
@@ -303,9 +303,9 @@ test "unordered push, get, and pop" {
 test "partial push and poll" {
     var elements: [3]Element = undefined;
     var prevs: [elements.len]*Node = undefined;
-    var queue: Self = undefined;
+    var queue: Mpsc = undefined;
     var node: *Node = undefined;
-    init(&queue);
+    queue.init();
 
     for (elements[0..], 0..) |*element, i| {
         element.id = i;
@@ -414,8 +414,8 @@ test "partial push and poll" {
 
 test "pushFrontByConsumer, get, and pop" {
     var elements: [10]Element = undefined;
-    var queue: Self = undefined;
-    init(&queue);
+    var queue: Mpsc = undefined;
+    queue.init();
 
     // Push front by consumer
     try std.testing.expectEqual(queue.pop(), null);
