@@ -41,7 +41,7 @@
 
     ```zig
     const mpsc = b.dependency("mpsc", .{});
-    exe.addModule("mpsc", mpsc.module("mpsc"));
+    exe.addModule("Mpsc", mpsc.module("Mpsc"));
     ```
 
     </details>
